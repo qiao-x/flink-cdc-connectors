@@ -40,6 +40,7 @@ public class FinishedSnapshotSplitsReportEvent implements SourceEvent {
         this.finishedOffsets = finishedOffsets;
     }
 
+    //splitId -> binlog offset的map
     public Map<String, BinlogOffset> getFinishedOffsets() {
         return finishedOffsets;
     }

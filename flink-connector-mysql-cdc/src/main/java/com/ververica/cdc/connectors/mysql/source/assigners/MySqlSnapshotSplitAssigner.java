@@ -262,7 +262,8 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
 
     @Override
     public void onFinishedSplits(Map<String, BinlogOffset> splitFinishedOffsets) {
-        this.splitFinishedOffsets.putAll(splitFinishedOffsets);
+        this.splitFinishedOffsets.putAll(splitFinishedOffsets); //收到完成的offset就放进去
+        //分片offset都回收了，证明有机会标记assigner为finish状态
         if (allSplitsFinished() && AssignerStatus.isAssigning(assignerStatus)) {
             // Skip the waiting checkpoint when current parallelism is 1 which means we do not need
             // to care about the global output data order of snapshot splits and binlog split.
@@ -271,6 +272,7 @@ public class MySqlSnapshotSplitAssigner implements MySqlSplitAssigner {
                 LOG.info(
                         "Snapshot split assigner received all splits finished and the job parallelism is 1, snapshot split assigner is turn into finished status.");
             } else {
+                //并行度不为1， 那需要等待一次checkpoint完成，assigner才能标记为finish
                 LOG.info(
                         "Snapshot split assigner received all splits finished, waiting for a complete checkpoint to mark the assigner finished.");
             }

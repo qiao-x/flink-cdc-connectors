@@ -164,6 +164,12 @@ public class MySqlSourceReader<T>
         context.sendSplitRequest();
     }
 
+    //这个方法在restore的时候，也会被调用，全部add进来
+    //这个也是source reader的一个入口， 当调用super.addSplits，会调用splitFetcherManager.addSplits(splits);
+    //splitFetcherManager会提交一个封装了split fetcher的runnable， 到一个线程池
+    //split fecher会不停调用fetch task或者add split task，
+    // fetch task会调用split reader的fetch()
+    //add split task会调用split reader的handleSplitsChanges()
     @Override
     public void addSplits(List<MySqlSplit> splits) {
         // restore for finishedUnackedSplits
@@ -231,6 +237,7 @@ public class MySqlSourceReader<T>
                     subtaskId,
                     ackEvent.getFinishedSplits());
             for (String splitId : ackEvent.getFinishedSplits()) {
+                //enumerator那边表示对应split的完成信息(比如t2:1, hw=1000)已经收到，可以从unack列表中移除了
                 this.finishedUnackedSplits.remove(splitId);
             }
         } else if (sourceEvent instanceof FinishedSnapshotSplitsRequestEvent) {
@@ -238,6 +245,8 @@ public class MySqlSourceReader<T>
             LOG.debug(
                     "The subtask {} receives request to report finished snapshot splits.",
                     subtaskId);
+            //enumerator定期发过来的信号，snapshot split等待完成期间，要求source reader检查一下
+            //是否仍有finished unack的snapshot split，如果有，请上报一下offset信息
             reportFinishedSnapshotSplitsIfNeed();
         } else if (sourceEvent instanceof BinlogSplitMetaEvent) {
             LOG.debug(

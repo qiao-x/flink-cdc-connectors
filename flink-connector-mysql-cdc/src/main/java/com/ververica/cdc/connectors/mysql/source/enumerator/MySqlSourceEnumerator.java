@@ -145,11 +145,12 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
                     (FinishedSnapshotSplitsReportEvent) sourceEvent;
             Map<String, BinlogOffset> finishedOffsets = reportEvent.getFinishedOffsets();
 
+            //让assigner记录一下offset，同时check一下是不是offset回收全部完成，进而标记assigner为finish状态
             splitAssigner.onFinishedSplits(finishedOffsets);
 
             wakeupBinlogReaderIfNeed();
 
-            // send acknowledge event
+            // send acknowledge event，用于清除unack的list
             FinishedSnapshotSplitsAckEvent ackEvent =
                     new FinishedSnapshotSplitsAckEvent(new ArrayList<>(finishedOffsets.keySet()));
             context.sendEventToSourceReader(subtaskId, ackEvent);
@@ -220,6 +221,9 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
                 .toArray();
     }
 
+    //如果snapshot split assigner把所有table、split都assign了
+    //但是assign出去的分片数量 和 回收的分片offset不相等，证明仍处于等待中，无法开启binlog split阶段
+    //这个方法就是解决这个问题 异步线程定期发送消息给source reader，检查一下是否有
     private void syncWithReaders(int[] subtaskIds, Throwable t) {
         if (t != null) {
             throw new FlinkRuntimeException("Failed to list obtain registered readers due to:", t);
@@ -247,6 +251,7 @@ public class MySqlSourceEnumerator implements SplitEnumerator<MySqlSplit, Pendin
         }
     }
 
+    //assigner为finish状态的前提下，就可以发送信号给source reader，唤醒binlog reader
     private void wakeupBinlogReaderIfNeed() {
         if (isAssigningFinished(splitAssigner.getAssignerStatus()) && binlogReaderIsSuspended) {
             for (int subtaskId : getRegisteredReader()) {
